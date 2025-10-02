@@ -17,10 +17,12 @@ public class TransactionService {
     
     private final UserRepository userRepository;
     private final TransactionRepository transactionRepository;
+    private final IncentiveService incentiveService;
     
-    public TransactionService(UserRepository userRepository, TransactionRepository transactionRepository) {
+    public TransactionService(UserRepository userRepository, TransactionRepository transactionRepository, IncentiveService incentiveService) {
         this.userRepository = userRepository;
         this.transactionRepository = transactionRepository;
+        this.incentiveService = incentiveService;
     }
     
     @Transactional
@@ -50,16 +52,20 @@ public class TransactionService {
         logger.info("Processing valid transaction: {} -> {} amount: {}", 
                    sender.getName(), recipient.getName(), transaction.getAmount());
         
-        // Update balances
+        // Get incentive from the API
+        float incentiveAmount = incentiveService.getIncentive(transaction);
+        logger.info("Received incentive amount: {} for transaction: {}", incentiveAmount, transaction);
+        
+        // Update balances - sender pays transaction amount, recipient gets transaction amount + incentive
         sender.setBalance(sender.getBalance() - transaction.getAmount());
-        recipient.setBalance(recipient.getBalance() + transaction.getAmount());
+        recipient.setBalance(recipient.getBalance() + transaction.getAmount() + incentiveAmount);
         
         // Save updated users
         userRepository.save(sender);
         userRepository.save(recipient);
         
-        // Create and save transaction record
-        TransactionRecord transactionRecord = new TransactionRecord(sender, recipient, transaction.getAmount());
+        // Create and save transaction record with incentive
+        TransactionRecord transactionRecord = new TransactionRecord(sender, recipient, transaction.getAmount(), incentiveAmount);
         transactionRepository.save(transactionRecord);
         
         return true;
